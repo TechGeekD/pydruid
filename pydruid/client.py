@@ -17,6 +17,7 @@ from __future__ import division
 from __future__ import absolute_import
 
 import json
+import ssl
 import re
 
 from six.moves import urllib
@@ -37,10 +38,14 @@ class BaseDruidClient(object):
         self.username = None
         self.password = None
         self.proxies = None
+        self.ignore_certificate_errors = False
 
     def set_basic_auth_credentials(self, username, password):
         self.username = username
         self.password = password
+        
+    def set_ignore_certificate_errors(self, value=True):
+        self.ignore_certificate_errors = value
 
     def set_proxies(self, proxies):
         self.proxies = proxies
@@ -545,11 +550,18 @@ class PyDruid(BaseDruidClient):
     def __init__(self, url, endpoint):
         super(PyDruid, self).__init__(url, endpoint)
 
+    def ssl_context(self):
+        ctx = ssl.create_default_context()
+        if self.ignore_certificate_errors:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+        
     def _post(self, query):
         try:
             headers, querystr, url = self._prepare_url_headers_and_body(query)
             req = urllib.request.Request(url, querystr, headers)
-            res = urllib.request.urlopen(req)
+            res = urllib.request.urlopen(req, context=self.ssl_context())
             data = res.read().decode("utf-8")
             res.close()
         except urllib.error.HTTPError as e:
